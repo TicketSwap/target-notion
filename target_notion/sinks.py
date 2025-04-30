@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from caseconverter import snakecase
 from notion_client import Client
+from notion_client.errors import HTTPResponseError
+from retry import retry
 from singer_sdk.sinks import RecordSink
 
 
@@ -17,6 +18,7 @@ class notionSink(RecordSink):
         self.client = Client(auth=self.config["api_key"])
         self.database_schema = self.get_database_schema()
 
+    @retry(HTTPResponseError, tries=3, delay=1, backoff=4, max_delay=10)
     def process_record(self, record: dict, context: dict) -> None:
         """Process the record.
 
@@ -55,7 +57,7 @@ class notionSink(RecordSink):
                 self.database_schema.get(key, {})["type"], value
             )
             for key, value in record.items()
-            if key in self.database_schema
+            if key in self.database_schema and value
         }
 
     def create_page_property(self, _type: str, value) -> dict:
@@ -66,17 +68,17 @@ class notionSink(RecordSink):
             case "rich_text":
                 _property = {"rich_text": [{"text": {"content": str(value)}}]}
             case "number":
-                _property = {"number": float(value) if value else None}
+                _property = {"number": float(value)}
             case "select":
-                _property = {"select": {"name": str(value)}}
+                _property = {"select": {"name": str(value).replace(",", "")}}
             case "multi_select":
-                _property = {"multi_select": [{"name": str(v)} for v in value.split(", ") if value]}
+                _property = {"multi_select": [{"name": str(v).replace(",", "")} for v in value.split(", ")]}
             case "date":
                 _property = {"date": {"start": value}}
             case "people":
                 _property = {"people": [{"id": str(v)} for v in value.split(", ")]}
             case "files":
-                _property = {"files": [{"name": v["name"], "url": v["url"]} for v in value.split(", ") if value]}
+                _property = {"files": [{"name": v["name"], "url": v["url"]} for v in value.split(", ")]}
             case "checkbox":
                 _property = {"checkbox": value}
             case "url":
@@ -86,7 +88,7 @@ class notionSink(RecordSink):
             case "phone_number":
                 _property = {"phone_number": str(value)}
             case "relation":
-                _property = {"relation": [{"id": v} for v in value.split(", ") if value]}
+                _property = {"relation": [{"id": v} for v in value.split(", ")]}
             case _:
                 msg = f"Unsupported property type: {_type}"
                 raise ValueError(msg)
