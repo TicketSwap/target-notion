@@ -75,7 +75,7 @@ class notionSink(BatchSink):
 
     @retry(HTTPResponseError, tries=3, delay=1, backoff=4, max_delay=10)
     def create_page(self, record: dict) -> None:
-        """Process the record.
+        """Create the page.
 
         Args:
             record: Individual record in the stream.
