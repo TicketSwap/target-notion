@@ -45,7 +45,7 @@ class notionSink(BatchSink):
         for record in filtered_records:
             self.create_page(record)
 
-    def get_existing_pages(self, records: dict) -> list:
+    def get_existing_pages(self, records: list[dict]) -> list:
         """Get existing pages in the database."""
         _filter = {
             "or": [
