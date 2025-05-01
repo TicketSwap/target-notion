@@ -1,7 +1,7 @@
 """notion target sink class, which handles writing streams."""
 
 from __future__ import annotations
-
+import os
 from caseconverter import snakecase
 from notion_client import Client
 from notion_client.errors import HTTPResponseError
@@ -18,6 +18,14 @@ class notionSink(BatchSink):
         """Initialize the sink."""
         super().__init__(**kwargs)
         self.client = Client(auth=self.config["api_key"])
+        database_mapping = {
+            mapping["extractor_namespace"]: {mapping["stream_name"]: mapping["database_id"]}
+            for mapping in self.config["streams"]
+        }
+        self.database_id = database_mapping.get(os.environ.get("MELTANO_EXTRACTOR_NAMESPACE"), {}).get(self.stream_name)
+        if not self.database_id:
+            msg = f"Database ID not found for stream {self.stream_name}."
+            raise ValueError(msg)
         self.database_schema = self.get_database_schema()
         self.key_property = self.key_properties[0]
         self.snake_key_property = snakecase(self.key_property)
@@ -58,7 +66,7 @@ class notionSink(BatchSink):
         existing_pages = {}
         while has_more:
             pages = self.client.databases.query(
-                database_id=self.config["database_id"],
+                database_id=self.database_id,
                 start_cursor=start_cursor,
                 filter_properties=[],
                 filter=_filter,
@@ -82,7 +90,7 @@ class notionSink(BatchSink):
             context: Stream partition or context dictionary.
         """
         self.client.pages.create(
-            parent={"database_id": self.config["database_id"]},
+            parent={"database_id": self.database_id},
             properties=self.create_page_properties(record),
         )
 
@@ -92,7 +100,7 @@ class notionSink(BatchSink):
         Returns:
             dict: The database schema.
         """
-        db = self.client.databases.retrieve(self.config["database_id"])
+        db = self.client.databases.retrieve(self.database_id)
         return {
             snakecase(name): {"name": name, "type": _property["type"]} for name, _property in db["properties"].items()
         }
