@@ -6,30 +6,84 @@ from caseconverter import snakecase
 from notion_client import Client
 from notion_client.errors import HTTPResponseError
 from retry import retry
-from singer_sdk.sinks import RecordSink
+from singer_sdk.sinks import BatchSink
 
 
-class notionSink(RecordSink):
+class notionSink(BatchSink):
     """notion target sink class."""
+
+    MAX_SIZE_DEFAULT = 100
 
     def __init__(self, **kwargs) -> None:  # noqa: ANN003
         """Initialize the sink."""
         super().__init__(**kwargs)
         self.client = Client(auth=self.config["api_key"])
         self.database_schema = self.get_database_schema()
+        self.key_property = self.key_properties[0]
+        self.snake_key_property = snakecase(self.key_property)
+        self.database_key_property = self.database_schema[self.snake_key_property]["name"]
+
+    def process_batch(self, context: dict) -> None:
+        """Process a batch with the given batch context.
+
+        This method must be overridden.
+
+        If :meth:`~singer_sdk.BatchSink.process_record()` is not overridden,
+        the `context["records"]` list will contain all records from the given batch
+        context.
+
+        If duplicates are merged, these can be tracked via
+        :meth:`~singer_sdk.Sink.tally_duplicate_merged()`.
+
+        Args:
+            context: Stream partition or context dictionary.
+        """
+        records = [{snakecase(key): value for key, value in record.items()} for record in context["records"]]
+        existing_pages = self.get_existing_pages(records)
+        filtered_records = [record for record in records if record[self.snake_key_property] not in existing_pages]
+        self.logger.info(f"Creating {len(filtered_records)}/{len(records)} pages.")
+        for record in filtered_records:
+            self.create_page(record)
+
+    def get_existing_pages(self, records: list[dict]) -> list:
+        """Get existing pages in the database."""
+        _filter = {
+            "or": [
+                {"property": self.database_key_property, "title": {"equals": record[self.snake_key_property]}}
+                for record in records
+            ]
+        }
+        has_more = True
+        start_cursor = None
+        existing_pages = {}
+        while has_more:
+            pages = self.client.databases.query(
+                database_id=self.config["database_id"],
+                start_cursor=start_cursor,
+                filter_properties=[],
+                filter=_filter,
+            )
+            existing_pages.update(
+                {
+                    page["properties"][self.database_key_property]["rich_text"][0]["text"]["content"]: page["id"]
+                    for page in pages["results"]
+                }
+            )
+            has_more = pages["has_more"]
+            start_cursor = pages.get("next_cursor")
+        return existing_pages
 
     @retry(HTTPResponseError, tries=3, delay=1, backoff=4, max_delay=10)
-    def process_record(self, record: dict, context: dict) -> None:
-        """Process the record.
+    def create_page(self, record: dict) -> None:
+        """Create the page.
 
         Args:
             record: Individual record in the stream.
             context: Stream partition or context dictionary.
         """
-        snakecase_record = {snakecase(key): value for key, value in record.items()}
         self.client.pages.create(
             parent={"database_id": self.config["database_id"]},
-            properties=self.create_page_properties(snakecase_record),
+            properties=self.create_page_properties(record),
         )
 
     def get_database_schema(self) -> dict:
