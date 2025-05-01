@@ -17,9 +17,32 @@ class Targetnotion(Target):
 
     config_jsonschema = th.PropertiesList(
         th.Property(
-            "database_id",
-            th.StringType(nullable=False),
-            description="ID of the parent page you want to create the database in",
+            "streams",
+            th.ArrayType(
+                th.ObjectType(
+                    th.Property(
+                        "extractor_namespace",
+                        th.StringType,
+                        description="Extractor namespace which contains the stream to be moved to Notion database.",
+                        required=True,
+                    ),
+                    th.Property(
+                        "stream_name",
+                        th.StringType,
+                        description="Name of the input stream to be moved to Notion database.",
+                        required=True,
+                    ),
+                    th.Property(
+                        "database_id",
+                        th.StringType,
+                        description="Id of the Notion database to be used.",
+                        required=True,
+                    ),
+                    nullable=False,
+                ),
+            ),
+            required=True,
+            description="List of streams to be moved to Notion database.",
         ),
         th.Property(
             "api_key",
