@@ -101,8 +101,11 @@ class notionSink(BatchSink):
             dict: The database schema.
         """
         db = self.client.databases.retrieve(self.database_id)
+        data_source_id = db["data_sources"][0]["id"]
+        data_source = self.client.data_sources.retrieve(data_source_id)
         return {
-            snakecase(name): {"name": name, "type": _property["type"]} for name, _property in db["properties"].items()
+            snakecase(name): {"name": name, "type": _property["type"]}
+            for name, _property in data_source["properties"].items()
         }
 
     def create_page_properties(self, record: dict) -> dict:
