@@ -1,7 +1,9 @@
 """notion target sink class, which handles writing streams."""
 
 from __future__ import annotations
+
 import os
+
 from caseconverter import snakecase
 from notion_client import Client
 from notion_client.errors import HTTPResponseError
@@ -18,18 +20,20 @@ class notionSink(BatchSink):
         """Initialize the sink."""
         super().__init__(**kwargs)
         self.client = Client(auth=self.config["api_key"])
-        database_mapping = {
-            mapping["extractor_namespace"]: {mapping["stream_name"]: mapping["database_id"]}
+        data_source_mapping = {
+            mapping["extractor_namespace"]: {mapping["stream_name"]: mapping["data_source_id"]}
             for mapping in self.config["streams"]
         }
-        self.database_id = database_mapping.get(os.environ.get("MELTANO_EXTRACTOR_NAMESPACE"), {}).get(self.stream_name)
-        if not self.database_id:
-            msg = f"Database ID not found for stream {self.stream_name}."
+        self.data_source_id = data_source_mapping.get(os.environ.get("MELTANO_EXTRACTOR_NAMESPACE"), {}).get(
+            self.stream_name
+        )
+        if not self.data_source_id:
+            msg = f"Data source ID not found for stream {self.stream_name}."
             raise ValueError(msg)
-        self.database_schema = self.get_database_schema()
+        self.data_source_schema = self.get_data_source_schema()
         self.key_property = self.key_properties[0]
         self.snake_key_property = snakecase(self.key_property)
-        self.database_key_property = self.database_schema[self.snake_key_property]["name"]
+        self.data_source_key_property = self.data_source_schema[self.snake_key_property]["name"]
 
     def process_batch(self, context: dict) -> None:
         """Process a batch with the given batch context.
@@ -54,10 +58,10 @@ class notionSink(BatchSink):
             self.create_page(record)
 
     def get_existing_pages(self, records: list[dict]) -> list:
-        """Get existing pages in the database."""
+        """Get existing pages in the data_source."""
         _filter = {
             "or": [
-                {"property": self.database_key_property, "title": {"equals": record[self.snake_key_property]}}
+                {"property": self.data_source_key_property, "title": {"equals": record[self.snake_key_property]}}
                 for record in records
             ]
         }
@@ -65,15 +69,15 @@ class notionSink(BatchSink):
         start_cursor = None
         existing_pages = {}
         while has_more:
-            pages = self.client.databases.query(
-                database_id=self.database_id,
+            pages = self.client.data_sources.query(
+                data_source_id=self.data_source_id,
                 start_cursor=start_cursor,
                 filter_properties=[],
                 filter=_filter,
             )
             existing_pages.update(
                 {
-                    page["properties"][self.database_key_property]["rich_text"][0]["text"]["content"]: page["id"]
+                    page["properties"][self.data_source_key_property]["rich_text"][0]["text"]["content"]: page["id"]
                     for page in pages["results"]
                 }
             )
@@ -90,19 +94,17 @@ class notionSink(BatchSink):
             context: Stream partition or context dictionary.
         """
         self.client.pages.create(
-            parent={"database_id": self.database_id},
+            parent={"data_source_id": self.data_source_id},
             properties=self.create_page_properties(record),
         )
 
-    def get_database_schema(self) -> dict:
-        """Get the database schema.
+    def get_data_source_schema(self) -> dict:
+        """Get the data_source schema.
 
         Returns:
-            dict: The database schema.
+            dict: The data_source schema.
         """
-        db = self.client.databases.retrieve(self.database_id)
-        data_source_id = db["data_sources"][0]["id"]
-        data_source = self.client.data_sources.retrieve(data_source_id)
+        data_source = self.client.data_sources.retrieve(self.data_source_id)
         return {
             snakecase(name): {"name": name, "type": _property["type"]}
             for name, _property in data_source["properties"].items()
@@ -118,11 +120,11 @@ class notionSink(BatchSink):
             dict: The page properties.
         """
         return {
-            self.database_schema.get(key, {})["name"]: self.create_page_property(
-                self.database_schema.get(key, {})["type"], value
+            self.data_source_schema.get(key, {})["name"]: self.create_page_property(
+                self.data_source_schema.get(key, {})["type"], value
             )
             for key, value in record.items()
-            if key in self.database_schema and value
+            if key in self.data_source_schema and value
         }
 
     def create_page_property(self, _type: str, value) -> dict:
