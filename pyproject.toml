@@ -12,7 +12,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -20,11 +19,11 @@ classifiers = [
 ]
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
-    "singer-sdk~=0.48.1",
-    "requests~=2.32.3",
-    "notion-client>=2.3.0",
+    "singer-sdk~=0.54.9",
+    "requests~=2.34.2",
+    "notion-client>=3.1.0",
     "case-converter>=1.2.0",
     "retry>=0.9.2",
 ]
@@ -43,14 +42,34 @@ dev = [
     { include-group = "test" },
 ]
 test = [
-    "pytest>=8",
-    "pytest-github-actions-annotate-failures>=0.3",
+    "pytest>=9.1.1",
+    "pytest-github-actions-annotate-failures>=0.4.2",
     "singer-sdk[testing]",
 ]
 [tool.hatch.build.targets.wheel]
 packages = [
     "target_notion",
 ]
+
+[tool.tox]
+requires = [
+    "tox>=4.53",
+    "tox-uv>=1.35",
+]
+env_list = [
+    { prefix = "3.", start = 10 },
+]
+
+[tool.tox.env_run_base]
+description = "run tests on Python {env_name}"
+runner = "uv-venv-lock-runner"
+pass_env = [
+    "CI",
+    "GITHUB_*",
+    "TARGET_NOTION_*",
+]
+dependency_groups = [ "test" ]
+commands = [ [ "pytest", { replace = "posargs", default = [ "tests" ], extend = true } ] ]
 
 [tool.mypy]
 warn_unused_configs = true
