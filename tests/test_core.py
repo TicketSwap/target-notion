@@ -5,22 +5,42 @@ from __future__ import annotations
 import typing as t
 
 from singer_sdk.testing import get_target_test_class
+from singer_sdk.testing.suites import SingerTestSuite
+from singer_sdk.testing.target_tests import (
+    TargetCliPrintsTest,
+    TargetInvalidSchemaTest,
+    TargetRecordBeforeSchemaTest,
+)
 
 from target_notion.target import Targetnotion
 
-# TODO: Initialize minimal target config
-SAMPLE_CONFIG: dict[str, t.Any] = {}
+SAMPLE_CONFIG: dict[str, t.Any] = {
+    "streams": [
+        {
+            "extractor_namespace": "test",
+            "stream_name": "test",
+            "data_source_id": "00000000-0000-0000-0000-000000000000",
+        },
+    ],
+    "api_key": "test",
+}
 
-
-# Run standard built-in target tests from the SDK:
 StandardTargetTests = get_target_test_class(
     target_class=Targetnotion,
     config=SAMPLE_CONFIG,
+    include_target_tests=False,
+    custom_suites=[
+        SingerTestSuite(
+            kind="target",
+            tests=[
+                TargetCliPrintsTest,
+                TargetInvalidSchemaTest,
+                TargetRecordBeforeSchemaTest,
+            ],
+        ),
+    ],
 )
 
 
 class TestTargetnotion(StandardTargetTests):  # type: ignore[misc, valid-type]
-    """Standard Target Tests."""
-
-
-# TODO: Create additional tests as appropriate for your target.
+    """Standard Target Tests that never reach Notion."""

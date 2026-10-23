@@ -1,6 +1,3 @@
-### A CI workflow template that runs linting and python testing
-### TODO: Modify as needed or as desired.
-
 name: Test target-notion
 
 on:
@@ -12,39 +9,54 @@ on:
     - tests/**
     - pyproject.toml
     - uv.lock
-    - tox.ini
   pull_request:
-    branches: [main]
     paths:
     - .github/workflows/test.yml
     - target_notion/**
     - tests/**
     - pyproject.toml
     - uv.lock
-    - tox.ini
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 env:
   FORCE_COLOR: 1
 
+permissions:
+  contents: read
+
 jobs:
-  pytest:
+  build-package:
+    name: Build & verify package
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version:
-        - "3.10"
-        - "3.11"
-        - "3.12"
-        - "3.13"
+    outputs:
+      supported-python-versions: ${{ steps.baipp.outputs.supported_python_classifiers_json_array }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      with:
+        persist-credentials: false
+    - uses: hynek/build-and-inspect-python-package@67230f7b8410ae0052b39c1efc89d89fff43ff10 # v3.0.2
+      id: baipp
+
+  pytest:
+    name: Test
+    needs: [build-package]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ${{ fromJson(needs.build-package.outputs.supported-python-versions) }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - name: Setup uv
+      uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       with:
         python-version: ${{ matrix.python-version }}
-    - run: pipx install tox
     - name: Run Tox
-      run: |
-        tox -e $(echo py${{ matrix.python-version }} | tr -d .)
+      env:
+        PYTHON_VERSION: ${{ matrix.python-version }}
+      run: uvx --with=tox-uv tox -e "$PYTHON_VERSION"
