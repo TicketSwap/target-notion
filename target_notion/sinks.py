@@ -11,7 +11,7 @@ from retry import retry
 from singer_sdk.sinks import BatchSink
 
 
-class notionSink(BatchSink):
+class notionSink(BatchSink):  # noqa: N801
     """notion target sink class."""
 
     MAX_SIZE_DEFAULT = 100
@@ -21,19 +21,23 @@ class notionSink(BatchSink):
         super().__init__(**kwargs)
         self.client = Client(auth=self.config["api_key"])
         data_source_mapping = {
-            mapping["extractor_namespace"]: {mapping["stream_name"]: mapping["data_source_id"]}
+            mapping["extractor_namespace"]: {
+                mapping["stream_name"]: mapping["data_source_id"]
+            }
             for mapping in self.config["streams"]
         }
-        self.data_source_id = data_source_mapping.get(os.environ.get("MELTANO_EXTRACTOR_NAMESPACE"), {}).get(
-            self.stream_name
-        )
+        self.data_source_id = data_source_mapping.get(
+            os.environ.get("MELTANO_EXTRACTOR_NAMESPACE"), {}
+        ).get(self.stream_name)
         if not self.data_source_id:
             msg = f"Data source ID not found for stream {self.stream_name}."
             raise ValueError(msg)
         self.data_source_schema = self.get_data_source_schema()
         self.key_property = self.key_properties[0]
         self.snake_key_property = snakecase(self.key_property)
-        self.data_source_key_property = self.data_source_schema[self.snake_key_property]["name"]
+        self.data_source_key_property = self.data_source_schema[
+            self.snake_key_property
+        ]["name"]
 
     def process_batch(self, context: dict) -> None:
         """Process a batch with the given batch context.
@@ -50,10 +54,17 @@ class notionSink(BatchSink):
         Args:
             context: Stream partition or context dictionary.
         """
-        records = [{snakecase(key): value for key, value in record.items()} for record in context["records"]]
+        records = [
+            {snakecase(key): value for key, value in record.items()}
+            for record in context["records"]
+        ]
         existing_pages = self.get_existing_pages(records)
-        filtered_records = [record for record in records if record[self.snake_key_property] not in existing_pages]
-        self.logger.info(f"Creating {len(filtered_records)}/{len(records)} pages.")
+        filtered_records = [
+            record
+            for record in records
+            if record[self.snake_key_property] not in existing_pages
+        ]
+        self.logger.info("Creating %d/%d pages.", len(filtered_records), len(records))
         for record in filtered_records:
             self.create_page(record)
 
@@ -61,7 +72,10 @@ class notionSink(BatchSink):
         """Get existing pages in the data_source."""
         _filter = {
             "or": [
-                {"property": self.data_source_key_property, "title": {"equals": record[self.snake_key_property]}}
+                {
+                    "property": self.data_source_key_property,
+                    "title": {"equals": record[self.snake_key_property]},
+                }
                 for record in records
             ]
         }
@@ -77,7 +91,9 @@ class notionSink(BatchSink):
             )
             existing_pages.update(
                 {
-                    page["properties"][self.data_source_key_property]["rich_text"][0]["text"]["content"]: page["id"]
+                    page["properties"][self.data_source_key_property]["rich_text"][0][
+                        "text"
+                    ]["content"]: page["id"]
                     for page in pages["results"]
                 }
             )
@@ -127,11 +143,15 @@ class notionSink(BatchSink):
             if key in self.data_source_schema and value
         }
 
-    def create_page_property(self, _type: str, value) -> dict:
+    def create_page_property(self, _type: str, value) -> dict:  # noqa: ANN001, C901, PLR0912
         """Create a page property from the type and value."""
         match _type:
             case "title":
-                _property = {"id": "title", "type": "title", "title": [{"text": {"content": str(value)}}]}
+                _property = {
+                    "id": "title",
+                    "type": "title",
+                    "title": [{"text": {"content": str(value)}}],
+                }
             case "rich_text":
                 _property = {"rich_text": [{"text": {"content": str(value)}}]}
             case "number":
@@ -139,13 +159,21 @@ class notionSink(BatchSink):
             case "select":
                 _property = {"select": {"name": str(value).replace(",", "")}}
             case "multi_select":
-                _property = {"multi_select": [{"name": str(v).replace(",", "")} for v in value.split(", ")]}
+                _property = {
+                    "multi_select": [
+                        {"name": str(v).replace(",", "")} for v in value.split(", ")
+                    ]
+                }
             case "date":
                 _property = {"date": {"start": value}}
             case "people":
                 _property = {"people": [{"id": str(v)} for v in value.split(", ")]}
             case "files":
-                _property = {"files": [{"name": v["name"], "url": v["url"]} for v in value.split(", ")]}
+                _property = {
+                    "files": [
+                        {"name": v["name"], "url": v["url"]} for v in value.split(", ")
+                    ]
+                }
             case "checkbox":
                 _property = {"checkbox": value}
             case "url":

@@ -15,19 +15,25 @@ on:
     - tox.ini
   pull_request:
     branches: [main]
-    paths:
-    - .github/workflows/test.yml
-    - target_notion/**
-    - tests/**
-    - pyproject.toml
-    - uv.lock
-    - tox.ini
   workflow_dispatch:
 
 env:
   FORCE_COLOR: 1
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - name: Setup uv
+      uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+    - name: Run ruff
+      run: |
+        uvx ruff@0.17.3 check
+        uvx ruff@0.17.3 format --check
+
   pytest:
     runs-on: ubuntu-latest
     strategy:
@@ -48,3 +54,12 @@ jobs:
     - name: Run Tox
       run: |
         tox -e $(echo py${{ matrix.python-version }} | tr -d .)
+
+  test:
+    if: always()
+    needs: [pytest]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Fail if any pytest leg failed
+      if: needs.pytest.result != 'success'
+      run: exit 1
