@@ -8,7 +8,6 @@ from singer_sdk.testing import get_target_test_class
 
 from target_notion.target import Targetnotion
 
-# TODO: Initialize minimal target config
 SAMPLE_CONFIG: dict[str, t.Any] = {}
 
 
@@ -21,6 +20,3 @@ StandardTargetTests = get_target_test_class(
 
 class TestTargetnotion(StandardTargetTests):  # type: ignore[misc, valid-type]
     """Standard Target Tests."""
-
-
-# TODO: Create additional tests as appropriate for your target.

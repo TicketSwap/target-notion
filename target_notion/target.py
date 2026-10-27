@@ -23,13 +23,19 @@ class Targetnotion(Target):
                     th.Property(
                         "extractor_namespace",
                         th.StringType,
-                        description="Extractor namespace which contains the stream to be moved to Notion data source.",
+                        description=(
+                            "Extractor namespace which contains the stream "
+                            "to be moved to Notion data source."
+                        ),
                         required=True,
                     ),
                     th.Property(
                         "stream_name",
                         th.StringType,
-                        description="Name of the input stream to be moved to Notion data source.",
+                        description=(
+                            "Name of the input stream "
+                            "to be moved to Notion data source."
+                        ),
                         required=True,
                     ),
                     th.Property(
